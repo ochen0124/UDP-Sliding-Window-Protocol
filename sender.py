@@ -29,14 +29,15 @@ def sender(receiver_ip, receiver_port, window_size):
         ack_start = s.recvfrom(SEND_BUFFER_SIZE)
         ack_header = PacketHeader(ack_start[:16])
     
-    # split data into chunks of 1455 (?)
+    # split data into chunks 
     msg = sys.stdin.read()
     msg_chunks = [msg[i:i+SEND_BUFFER_SIZE-16] for i in range(0, len(msg), SEND_BUFFER_SIZE-16)]
     
     # send chunks as DATA while adjusting seq_num appropriately (starts at 0)
     ack_count = 0
     window = [x for x in range(window_size)]
-    
+    isAcked = [False for y in range(window_size)]
+
     # send first "window_size" number of packets
     for i in range(0,window_size,1):
         data_pkt_header = PacketHeader(type=2, seq_num=i, length=len(msg_chunks[i])) 
@@ -53,42 +54,46 @@ def sender(receiver_ip, receiver_port, window_size):
             ack_header.checksum = 0
             computed_checksum = compute_checksum(ack_header / "")
         except socket.timeout:
-            # resend packets in window here if timeout is received
+            # resend all packets in window that haven't been ACK'd
             for i in range(0,len(window),1):
-                data_pkt_header = PacketHeader(type=2, seq_num=window[i], length=len(msg_chunks[window[i]])) 
-                data_pkt_header.checksum = compute_checksum(data_pkt_header/ msg_chunks[window[i]])
-                data_pkt = data_pkt_header / msg_chunks[window[i]]
-                s.sendto(str(data_pkt), (receiver_ip, receiver_port))
+                if (isAcked[i] == False):
+                    data_pkt_header = PacketHeader(type=2, seq_num=window[i], length=len(msg_chunks[window[i]])) 
+                    data_pkt_header.checksum = compute_checksum(data_pkt_header/ msg_chunks[window[i]])
+                    data_pkt = data_pkt_header / msg_chunks[window[i]]
+                    s.sendto(str(data_pkt), (receiver_ip, receiver_port))
         else:
             
             if ack_header.type == 3 and ack_header.length == 0 and ack_checksum == computed_checksum: # check checksum, type and length of packet
-                if ack_header.seq_num == window[0]+1: # if ack has seq_num as expected
-                    window.pop(0)
-                    if len(window) != 0:
-                        if window[len(window)-1] < len(msg_chunks)-1:   # if window has space to move forward, it does so
-                            window.append(window[window_size-2]+1)
-                    ack_count += 1
-                    # send new window
-                    for i in range(0,len(window),1):
-                        data_pkt_header = PacketHeader(type=2, seq_num=window[i], length=len(msg_chunks[window[i]])) 
-                        data_pkt_header.checksum = compute_checksum(data_pkt_header/ msg_chunks[window[i]])
-                        data_pkt = data_pkt_header / msg_chunks[window[i]]
-                        s.sendto(str(data_pkt), (receiver_ip, receiver_port))
-                elif ack_header.seq_num > window[0]+1:    # if ack's seq_num is higher than expected, signifying the window should slide by more than one
-                    slide_count = ack_header.seq_num - (window[0]+1)
-                    while (slide_count >= 0):
-                        window.pop(0)
+                # if ack doesn't have same seq_num we sent but is within the window
+                if ack_header.seq_num > window[0] and ack_header.seq_num <= window[len(window)-1]: 
+                    # mark that seq_num as ACK'd
+                    isAcked[ack_header.seq_num - window[0]] = True
+                
+                # if ack has same seq_num sent (as expected)
+                elif ack_header.seq_num == window[0]:    
+                    # window is moved forward
+                    isAcked[ack_header.seq_num - window[0]] = True
+                    while isAcked[0]:
                         if len(window) != 0:
-                            if window[len(window)-1] < len(msg_chunks)-1:   # if window has space to move forward, it does so
-                                window.append(window[window_size-2]+1)
-                        ack_count += 1
-                        slide_count -= 1
-                    # send new window
+                            data_pkt_header = PacketHeader(type=2, seq_num=window[0], length=len(msg_chunks[window[0]])) 
+                            data_pkt_header.checksum = compute_checksum(data_pkt_header/ msg_chunks[window[0]])
+                            data_pkt = data_pkt_header / msg_chunks[window[0]]
+                            s.sendto(str(data_pkt), (receiver_ip, receiver_port))
+                            window.pop(0)
+                            if len(window) != 0:
+                                if window[len(window)-1] < len(msg_chunks)-1:   # if window has space to move forward, it does so
+                                    window.append(window[window_size-2]+1)
+                            isAcked.pop(0)
+                            ack_count += 1   
+                            isAcked.append(False)       
+                    
+                    # then, send packets in window that haven't already been ACK'd
                     for i in range(0,len(window),1):
-                        data_pkt_header = PacketHeader(type=2, seq_num=window[i], length=len(msg_chunks[window[i]])) 
-                        data_pkt_header.checksum = compute_checksum(data_pkt_header/ msg_chunks[window[i]])
-                        data_pkt = data_pkt_header / msg_chunks[window[i]]
-                        s.sendto(str(data_pkt), (receiver_ip, receiver_port))
+                        if isAcked[i] == False:
+                            data_pkt_header = PacketHeader(type=2, seq_num=window[i], length=len(msg_chunks[window[i]])) 
+                            data_pkt_header.checksum = compute_checksum(data_pkt_header/ msg_chunks[window[i]])
+                            data_pkt = data_pkt_header / msg_chunks[window[i]]
+                            s.sendto(str(data_pkt), (receiver_ip, receiver_port))
 
 
     # send END message
@@ -103,8 +108,6 @@ def sender(receiver_ip, receiver_port, window_size):
     while ack_header.seq_num != pkt_header_end.seq_num or ack_header.type != 3:
         ack_end = s.recvfrom(SEND_BUFFER_SIZE)
         ack_header = PacketHeader(ack_end[:16])
-
-
 
 def main():
     """Parse command-line arguments and call sender function """
