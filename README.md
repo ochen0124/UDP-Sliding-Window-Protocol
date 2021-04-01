@@ -1,1 +1,3 @@
 # UDP-Sliding-Window-Protocol
+
+In this project, my teammate and I created two variations of the UDP internet protocol to send and receiver messages between a client and server. We implemented a sliding window mechanism such that the sender can only send packets and receive acknowledgements (ACKS) in this window frame. Upon successfully sending a message, an acknowledgement (ACK) is sent from the receiver to the sender which moves the sliding window forward such that the next message can be sent. In the two variations (base and optimized) different techniques for sending and resending packets were implemented. Please read the respective descriptions for each to understand the difference in variation. 
