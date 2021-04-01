@@ -1,0 +1,1 @@
+Optimized code for the UDP Sliding Window Protol mechanism. If sender fails to receive acknowledgement from the receiver, sender will buffer all successful ACKS and only resend failed ACKS at the next timeout
