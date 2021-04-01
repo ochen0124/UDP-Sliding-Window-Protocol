@@ -1,4 +1,4 @@
-    ###############################################################################
+###############################################################################
 # receiver.py
 # Names: Stanley Zhang, Olivier Chen
 # BU IDs: U99944807, U33604671
@@ -62,7 +62,7 @@ def receiver(receiver_port, window_size):
                     if N != pkt_header.seq_num:
                         # if seq_num is less than N+window_size but greater than N:
                         if pkt_header.seq_num < N + window_size and pkt_header.seq_num > N:
-                            ack_header = PacketHeader(type=3, seq_num=N, length = 0)     # an ack with seq_num N is sent back
+                            ack_header = PacketHeader(type=3, seq_num=pkt_header.seq_num, length = 0)     
                             ack_header.checksum = compute_checksum(ack_header / "")
                             ack = ack_header / ""
                             s.sendto(str(ack), address)
@@ -81,12 +81,11 @@ def receiver(receiver_port, window_size):
                             buffer.append("")
                             M += 1
                         N = M
-                        ack_header = PacketHeader(type=3, seq_num=M, length = 0)     # an ack with seq_num M+1 is sent back
+                        ack_header = PacketHeader(type=3, seq_num=pkt_header.seq_num, length = 0)     
                         ack_header.checksum = compute_checksum(ack_header / "")
                         ack = ack_header / ""
                         s.sendto(str(ack), address)
                         
-
 def main():
     """Parse command-line argument and call receiver function """
     if len(sys.argv) != 3:
